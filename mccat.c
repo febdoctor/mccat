@@ -219,7 +219,8 @@ static void mainloop(int s)
 	if (rtp_check)
         {
             ssize_t new_rtp_seq;
-            uint32_t new_ssrc;
+            uint32_t new_ssrc, csrc;
+            unsigned int pt, cc;
 
 	    if (n < 12)
                 ts_fprintf(stderr, NULL, "read %d bytes: too short for RTP header\n", n);
@@ -227,11 +228,22 @@ static void mainloop(int s)
             {
                 new_rtp_seq = (buf[2] << 8) + buf[3];
                 new_ssrc = (((((buf[8] << 8) | buf[9]) << 8) | buf[10]) << 8) | buf[11];
-                if (rtp_seq < 0)
-                    ts_fprintf(stderr, NULL, "#%05d SSRC=0x%08x start\n", new_rtp_seq, new_ssrc);
-                else if (new_ssrc != ssrc)
-                        ts_fprintf(stderr, NULL, "#%05d SSRC=0x%08x SSRC change,   last seen #%05d SSRC=0x%08x\n",
-                                   new_rtp_seq, new_ssrc, rtp_seq, ssrc);
+                pt = buf[1] & 0x7f;
+                cc = buf[0] & 0x0f;
+                if (rtp_seq < 0 || new_ssrc != ssrc)
+                {
+                    unsigned int i;
+
+                    ts_fprintf(stderr, NULL, "#%05d SSRC=0x%08x CC=%-2u PT=%-3u start\n", new_rtp_seq, new_ssrc, cc, pt);
+                    /* FIXME: assuming no profile-specific extension headers */
+                    if ((unsigned int)n < 12 + 4 * cc)
+                        ts_fprintf(stderr, NULL, "read %d bytes: too short for RTP header with CC=%u\n", n, cc);
+                    else for (i = 12; i < 12 + 4 * cc; i += 4)
+                    {
+                        csrc = (((((buf[i] << 8) | buf[i + 1]) << 8) | buf[i + 2]) << 8) | buf[i + 3];
+                        ts_fprintf(stderr, NULL, "       CSRC=0x%08x%s\n", csrc, csrc == new_ssrc ? " *" : "");
+                    }
+                }
                 else if (!(((new_rtp_seq == 0) && (rtp_seq == 65535)) ||
                         new_rtp_seq == rtp_seq + 1))
                         ts_fprintf(stderr, NULL, "#%05d SSRC=0x%08x discontinuity, last seen #%05d SSRC=0x%08x\n",
