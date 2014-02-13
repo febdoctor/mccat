@@ -64,7 +64,8 @@ static void sighandler(int signum);
 int main(int argc, char *argv[])
 {
     int s;
-    sighandler_t oldint;
+    struct sigaction newsig = {.sa_handler=sighandler};
+    struct sigaction oldsig;
     struct sockaddr_in sin;
     struct ip_mreqn mreq;
 
@@ -116,10 +117,10 @@ int main(int argc, char *argv[])
 	}
     }
 
-    oldint = signal(SIGINT, sighandler);
-    signal(SIGUSR1, sighandler);
+    sigaction(SIGINT, &newsig, &oldsig);
+    sigaction(SIGUSR1, &newsig, NULL);
     mainloop(s);
-    signal(SIGINT, oldint);
+    sigaction(SIGINT, &oldsig, NULL);
 
     if (use_multicast)
     {
